@@ -22,7 +22,7 @@ def recommend(parsed: ParsedSQL, catalog: Catalog,
         ))
 
     out = scale.output_records or 0
-    if out >= 1_000_000:
+    if out >= 500_000:
         recs.append(Optimization(
             action="Build a cohort prefilter before joining event tables",
             rationale=f"Estimated output is large (~{out:,} rows).",
