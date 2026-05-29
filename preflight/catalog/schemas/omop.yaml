@@ -1,0 +1,43 @@
+# Seed OMOP CDM catalog. Row estimates are illustrative institution-scale defaults.
+schema: omop
+tables:
+  person:
+    category: demographics
+    volume: medium
+    risk: low
+    row_estimate: 2000000
+  visit_occurrence:
+    category: encounter
+    volume: large
+    risk: medium
+    row_estimate: 12000000
+  measurement:
+    category: clinical_event
+    volume: huge
+    risk: very_high
+    row_estimate: 1500000000
+  observation:
+    category: clinical_event
+    volume: huge
+    risk: high
+    row_estimate: 800000000
+  drug_exposure:
+    category: clinical_event
+    volume: huge
+    risk: high
+    row_estimate: 600000000
+  condition_occurrence:
+    category: clinical_event
+    volume: large
+    risk: medium
+    row_estimate: 300000000
+joins:
+  person->visit_occurrence: high
+  person->measurement: high
+  person->observation: high
+  person->drug_exposure: high
+  visit_occurrence->measurement: high
+columns:
+  measurement.measurement_concept_id: 0.0005
+  observation.observation_concept_id: 0.0008
+  drug_exposure.drug_concept_id: 0.001
