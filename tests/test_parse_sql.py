@@ -1,4 +1,6 @@
-from preflight.parse.sql import parse_sql
+import pytest
+
+from preflight.parse.sql import parse_sql, PreflightParseError
 
 SQL = """
 WITH baseline AS (
@@ -32,3 +34,8 @@ def test_simple_query_no_joins():
     assert p.base_tables == ["person"]
     assert p.join_count == 0
     assert p.has_aggregation is False
+
+
+def test_invalid_sql_raises_typed_error():
+    with pytest.raises(PreflightParseError):
+        parse_sql("SELECT FROM WHERE )(", dialect="duckdb")

@@ -24,11 +24,18 @@ def build_lineage(parsed: ParsedSQL, catalog: Catalog) -> Lineage:
             est_rows=prof.effective_rows() if catalog.is_known(table) else None,
         ))
 
-    # Chain edges across base tables in declared order, labeling by catalog fan-out.
+    # Edges follow the actual join graph (from ON-clause table qualifiers). Fall back
+    # to chaining base tables in order only when no explicit join pairs were found
+    # (e.g. implicit/comma joins).
+    base_set = set(parsed.base_tables)
+    if parsed.join_pairs:
+        pairs = [(s, t) for (s, t) in parsed.join_pairs if s in base_set and t in base_set]
+    else:
+        tables = parsed.base_tables
+        pairs = [(tables[i], tables[i + 1]) for i in range(len(tables) - 1)]
+
     edges = []
-    tables = parsed.base_tables
-    for i in range(len(tables) - 1):
-        src, tgt = tables[i], tables[i + 1]
+    for src, tgt in pairs:
         fanout = catalog.join_fanout(src, tgt)
         if fanout == "unknown":
             fanout = catalog.join_fanout(tgt, src)

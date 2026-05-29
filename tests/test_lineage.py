@@ -34,3 +34,20 @@ def test_lineage_captures_filters():
     cat = load_catalog("omop")
     lin = build_lineage(parsed, cat)
     assert "measurement_concept_id" in lin.filters
+
+
+def test_lineage_edges_follow_actual_join_graph():
+    sql = (
+        "SELECT p.person_id "
+        "FROM person p "
+        "JOIN measurement m ON p.person_id=m.person_id "
+        "JOIN visit_occurrence v ON v.person_id=p.person_id"
+    )
+    parsed = parse_sql(sql, dialect="duckdb")
+    cat = load_catalog("omop")
+    lin = build_lineage(parsed, cat)
+    edge_sets = {frozenset({e.source, e.target}) for e in lin.edges}
+    assert edge_sets == {
+        frozenset({"person", "measurement"}),
+        frozenset({"person", "visit_occurrence"}),
+    }

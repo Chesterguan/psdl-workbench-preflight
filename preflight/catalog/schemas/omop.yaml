@@ -29,7 +29,7 @@ tables:
   condition_occurrence:
     category: clinical_event
     volume: large
-    risk: medium
+    risk: high
     row_estimate: 300000000
 joins:
   person->visit_occurrence: high
