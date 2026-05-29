@@ -2,3 +2,5 @@ sqlglot==30.8.0
 duckdb==1.4.4
 pydantic==2.13.4
 PyYAML==6.0.3
+# Optional, only for the Postgres live connector:
+# psycopg[binary]>=3.1
