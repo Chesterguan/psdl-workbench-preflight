@@ -50,8 +50,10 @@ def parse_showplan_xml(xml_text: str) -> PlanFacts:
         node = PlanNode(op=phys, estimated_rows=_to_int(relop.get("EstimateRows")))
         if "Scan" in phys:
             node.scan_type = phys
-        if phys in _JOIN_OPS:
-            node.join_type = logical or "Join"
+        # A join physical op (esp. Hash Match) is also used for aggregation; only label
+        # it as a join when the logical op actually says so.
+        if phys in _JOIN_OPS and "Join" in logical:
+            node.join_type = logical
         if "Seek" in phys or "Index" in phys:
             node.index_used = True
 

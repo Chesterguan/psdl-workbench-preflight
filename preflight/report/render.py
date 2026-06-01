@@ -81,4 +81,9 @@ def render_text(report: PreflightReport) -> str:
 
     lines.append("\n=== CONFIDENCE ===")
     lines.append(f"Overall Confidence: {report.confidence.value}")
+
+    if report.notes:
+        lines.append("\n=== NOTES ===")
+        for note in report.notes:
+            lines.append(f"  - {note}")
     return "\n".join(lines)

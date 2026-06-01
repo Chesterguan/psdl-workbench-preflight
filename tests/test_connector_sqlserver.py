@@ -60,6 +60,25 @@ def test_scan_predicate_literal_is_redacted():
     assert "PROC_CD" in joined            # column kept
 
 
+SHOWPLAN_HASH_AGG = """<?xml version="1.0"?>
+<ShowPlanXML xmlns="http://schemas.microsoft.com/sqlserver/2004/07/showplan">
+ <BatchSequence><Batch><Statements><StmtSimple><QueryPlan>
+   <RelOp NodeId="0" PhysicalOp="Hash Match" LogicalOp="Aggregate" EstimateRows="500">
+     <RelOp NodeId="1" PhysicalOp="Clustered Index Scan" LogicalOp="Clustered Index Scan" EstimateRows="200000">
+       <IndexScan><Object Table="[dbo].[ORDER_PROCEDURE_DTL]"/></IndexScan>
+     </RelOp>
+   </RelOp>
+ </QueryPlan></StmtSimple></Statements></Batch></BatchSequence>
+</ShowPlanXML>"""
+
+
+def test_hash_match_aggregate_not_labeled_as_join():
+    # A Hash Match used for aggregation (LogicalOp=Aggregate) must NOT get a join_type.
+    facts = parse_showplan_xml(SHOWPLAN_HASH_AGG)
+    agg = next(n for n in facts.nodes if n.op == "Hash Match")
+    assert agg.join_type is None
+
+
 def test_empty_plan_returns_empty_facts():
     # A blank/absent plan (server returned no plan row) degrades gracefully, no exception.
     facts = parse_showplan_xml("")

@@ -123,3 +123,4 @@ class PreflightReport(BaseModel):
     query_plan: Optional[QueryPlan] = None
     runtime_category: RuntimeCategory
     confidence: Confidence
+    notes: List[str] = Field(default_factory=list)

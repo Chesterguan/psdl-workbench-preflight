@@ -29,3 +29,23 @@ def test_pipeline_with_connector_populates_plan_and_high_confidence():
     assert report.query_plan is not None
     assert report.confidence == Confidence.HIGH
     assert report.scale.confidence == Confidence.HIGH
+
+
+class _BoomConnector:
+    """A connector whose live analysis fails (e.g. SHOWPLAN error mid-ETL)."""
+    def analyze(self, sql):
+        raise RuntimeError("conversion failed for value 'SECRET123'")
+
+
+def test_connector_failure_degrades_gracefully_without_crashing():
+    sql = GeneratedSQL(
+        query="SELECT person_id FROM measurement WHERE measurement_concept_id = 3016723",
+        dialect="duckdb", target="omop")
+    report = run_preflight(sql, load_catalog("omop"), connector=_BoomConnector())
+
+    # No crash: the report is still produced, just without a live plan.
+    assert report.query_plan is None
+    assert report.confidence != Confidence.HIGH          # treated as offline
+    assert report.notes and any("plan unavailable" in n.lower() for n in report.notes)
+    # The connector error text is redacted so a literal in the message can't leak.
+    assert not any("SECRET123" in n for n in report.notes)

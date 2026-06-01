@@ -8,6 +8,7 @@ from preflight.bottleneck import find_bottlenecks
 from preflight.catalog.loader import Catalog
 from preflight.confidence import score_confidence
 from preflight.connector.base import Connector
+from preflight.connector.redact import redact_literals
 from preflight.contracts import GeneratedSQL, PreflightReport, StudySummary
 from preflight.estimate import estimate_scale
 from preflight.lineage import build_lineage
@@ -30,10 +31,20 @@ def run_preflight(sql: GeneratedSQL, catalog: Catalog,
 
     plan_rows = None
     query_plan = None
+    notes = []
     if connector is not None:
-        facts = connector.analyze(sql.query)
-        query_plan = facts.to_query_plan()
-        plan_rows = facts.total_estimated_rows
+        # The connector is the only impure dependency. A live-plan failure (SHOWPLAN
+        # error, lost connection, permissions, warehouse mid-ETL) must NOT crash the
+        # analysis — degrade to the offline catalog estimate and record why. The error
+        # text is redacted in case it echoes a literal value.
+        try:
+            facts = connector.analyze(sql.query)
+            query_plan = facts.to_query_plan()
+            plan_rows = facts.total_estimated_rows
+        except Exception as exc:  # noqa: BLE001 - any driver/parse error degrades gracefully
+            notes.append(
+                "Live query plan unavailable (connector error): "
+                f"{type(exc).__name__}: {redact_literals(str(exc))}")
 
     domains = sorted({catalog.profile(t).category for t in parsed.base_tables})
     summary = StudySummary(
@@ -53,7 +64,9 @@ def run_preflight(sql: GeneratedSQL, catalog: Catalog,
 
     optimizations = recommend(parsed, catalog, scale)
 
-    confidence = score_confidence(known_ratio, has_plan=connector is not None)
+    # Confidence reflects whether a live plan was actually obtained, not merely
+    # whether a connector was supplied (a failed connector degrades to offline).
+    confidence = score_confidence(known_ratio, has_plan=query_plan is not None)
 
     return PreflightReport(
         summary=summary,
@@ -66,4 +79,5 @@ def run_preflight(sql: GeneratedSQL, catalog: Catalog,
         query_plan=query_plan,
         runtime_category=runtime,
         confidence=confidence,
+        notes=notes,
     )
