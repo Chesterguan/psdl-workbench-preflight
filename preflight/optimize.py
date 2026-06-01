@@ -16,7 +16,7 @@ def recommend(parsed: ParsedSQL, catalog: Catalog,
 
     if event_tables and not parsed.filter_columns:
         recs.append(Optimization(
-            action="Add a concept filter on the clinical event table",
+            action="Add a selective filter (e.g. a code or date predicate) on the event table",
             rationale=f"Unfiltered scan of {', '.join(event_tables)} reads the entire table.",
             expected_benefit="Often >90% fewer scanned rows when filtering to specific concepts.",
         ))

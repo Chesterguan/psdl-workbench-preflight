@@ -40,7 +40,7 @@ def assess_risk(parsed: ParsedSQL, catalog: Catalog,
         for t in parsed.base_tables:
             if catalog.profile(t).category == "clinical_event":
                 score += 3
-                reasons.append(f"Unfiltered scan of clinical event table: {t} (no filter)")
+                reasons.append(f"Unfiltered scan of high-volume event table: {t} (no filter)")
                 break
 
     if score >= 6:
