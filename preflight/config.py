@@ -2,7 +2,6 @@
 from __future__ import annotations
 
 import os
-from typing import List
 
 
 def load_dotenv(path: str = ".env") -> None:

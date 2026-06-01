@@ -46,3 +46,31 @@ def test_catalog_bootstrap_duckdb_writes_yaml(tmp_path, capsys):
     text = open(out_yaml).read()
     assert text.startswith("# AUTO-GENERATED")
     assert "measurement" in text
+
+
+def test_catalog_bootstrap_defaults_out_to_catalog_dir(tmp_path, monkeypatch, capsys):
+    # With no --out, the YAML lands in $PREFLIGHT_CATALOG_DIR/<schema-name>.yaml.
+    from fixtures.build_omop import build_omop_duckdb
+    db = str(tmp_path / "omop.duckdb")
+    build_omop_duckdb(db).close()
+    catalog_dir = tmp_path / "catalogs"
+    monkeypatch.setenv("PREFLIGHT_CATALOG_DIR", str(catalog_dir))
+    rc = main(["catalog-bootstrap", "--duckdb-path", db, "--schema-name", "omop_live",
+               "--heuristic", "omop"])
+    assert rc == 0
+    written = catalog_dir / "omop_live.yaml"
+    assert written.exists()
+    # And it's now transparently loadable by name from that dir.
+    from preflight.catalog.loader import load_catalog
+    assert load_catalog("omop_live").is_known("measurement")
+
+
+def test_catalog_bootstrap_stdout(tmp_path, capsys):
+    from fixtures.build_omop import build_omop_duckdb
+    db = str(tmp_path / "omop.duckdb")
+    build_omop_duckdb(db).close()
+    rc = main(["catalog-bootstrap", "--duckdb-path", db, "--schema-name", "omop_live",
+               "--heuristic", "omop", "--stdout"])
+    assert rc == 0
+    out = capsys.readouterr().out
+    assert out.startswith("# AUTO-GENERATED")

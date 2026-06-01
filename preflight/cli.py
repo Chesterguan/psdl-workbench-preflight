@@ -70,12 +70,19 @@ def _cmd_catalog_bootstrap(args) -> int:
     doc = bootstrap_catalog(stats, schema=args.schema_name, heuristic=args.heuristic,
                             default_dialect=default_dialect, stats_as_of=args.stats_as_of)
     text = to_yaml(doc)
-    if args.out:
-        with open(args.out, "w") as fh:
-            fh.write(text)
-        print(f"wrote {len(doc['tables'])} tables to {args.out}")
-    else:
+    if args.stdout:
         print(text)
+        return 0
+    out_path = args.out
+    if out_path is None:
+        # Default to the user catalog dir so the new catalog is found transparently.
+        catalog_dir = os.path.expanduser(
+            os.environ.get("PREFLIGHT_CATALOG_DIR") or "~/.preflight/catalogs")
+        os.makedirs(catalog_dir, exist_ok=True)
+        out_path = os.path.join(catalog_dir, f"{args.schema_name}.yaml")
+    with open(out_path, "w") as fh:
+        fh.write(text)
+    print(f"wrote {len(doc['tables'])} tables to {out_path}")
     return 0
 
 
@@ -104,7 +111,9 @@ def main(argv: Optional[List[str]] = None) -> int:
                         help="Generate a catalog YAML from a DB's system catalogs (read-only)")
     bs.add_argument("--schema-name", required=True, help="Catalog/schema name to emit")
     bs.add_argument("--heuristic", choices=["epic", "omop", "generic"], default="generic")
-    bs.add_argument("--out", default=None, help="Output YAML path (default: stdout)")
+    bs.add_argument("--out", default=None,
+                    help="Output YAML path (default: $PREFLIGHT_CATALOG_DIR/<schema-name>.yaml)")
+    bs.add_argument("--stdout", action="store_true", help="Print YAML to stdout instead of writing")
     bs.add_argument("--stats-as-of", default=None, help="Freshness label to stamp into the YAML")
     src = bs.add_mutually_exclusive_group()
     src.add_argument("--duckdb-path", default=None)

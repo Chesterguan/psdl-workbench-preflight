@@ -36,12 +36,14 @@ class TableProfile:
 class Catalog:
     def __init__(self, schema: str, tables: Dict[str, TableProfile],
                  joins: Dict[str, str], columns: Dict[str, float],
-                 default_dialect: str = "generic"):
+                 default_dialect: str = "generic",
+                 stats_as_of: Optional[str] = None):
         self.schema = schema
         self._tables = tables
         self._joins = joins
         self._columns = columns
         self.default_dialect = default_dialect
+        self.stats_as_of = stats_as_of
 
     def is_known(self, table: str) -> bool:
         return table.lower() in self._tables
@@ -97,4 +99,5 @@ def load_catalog(schema: str, catalog_dir: Optional[str] = None) -> Catalog:
     joins = {k.lower(): v for k, v in (data.get("joins") or {}).items()}
     columns = {k.lower(): float(v) for k, v in (data.get("columns") or {}).items()}
     return Catalog(schema=data.get("schema", schema), tables=tables, joins=joins,
-                   columns=columns, default_dialect=data.get("default_dialect", "generic"))
+                   columns=columns, default_dialect=data.get("default_dialect", "generic"),
+                   stats_as_of=data.get("stats_as_of"))
