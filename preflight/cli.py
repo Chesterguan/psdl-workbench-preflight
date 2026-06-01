@@ -90,6 +90,17 @@ def _cmd_catalog_bootstrap(args) -> int:
     return 0
 
 
+def _cmd_tui(args) -> int:
+    from preflight.tui import run_tui
+    catalog_name = args.catalog or os.environ.get("PREFLIGHT_CATALOG") or "omop"
+    catalog = load_catalog(catalog_name, catalog_dir=args.catalog_dir)
+    dialect = args.dialect or os.environ.get("PREFLIGHT_DIALECT") or catalog.default_dialect
+    connector = _build_connector(args)
+    interactive = (not args.no_input) and sys.stdin.isatty()
+    return run_tui(args.path, catalog, dialect=dialect, connector=connector,
+                   interactive=interactive)
+
+
 def main(argv: Optional[List[str]] = None) -> int:
     load_default_dotenvs()
     parser = argparse.ArgumentParser(prog="preflight", description="SQL pre-execution analyzer")
@@ -126,6 +137,24 @@ def main(argv: Optional[List[str]] = None) -> int:
     src.add_argument("--postgres-dsn", default=None)
     src.add_argument("--sqlserver-dsn", default=None)
     bs.set_defaults(func=_cmd_catalog_bootstrap)
+
+    tui = sub.add_parser("tui",
+                         help="Interactive ops triage view (a .sql file or a directory of .sql)")
+    tui.add_argument("path", help="A .sql file or a directory of .sql files")
+    tui.add_argument("--dialect", default=None)
+    tui.add_argument("--catalog", default=None, help="Schema family catalog name")
+    tui.add_argument("--catalog-dir", default=None, help="Directory to resolve catalogs from")
+    tui.add_argument("--no-input", action="store_true",
+                     help="Non-interactive: render and exit (no drill-in prompt)")
+    tui_conn = tui.add_mutually_exclusive_group()
+    tui_conn.add_argument("--duckdb-fixture", action="store_true",
+                          help="Attach the synthetic OMOP DuckDB connector")
+    tui_conn.add_argument("--duckdb-path", default=None,
+                          help="Local DuckDB file (opened read-only)")
+    tui_conn.add_argument("--postgres-dsn", default=None, help="Postgres DSN for live EXPLAIN")
+    tui_conn.add_argument("--sqlserver-dsn", default=None,
+                          help="SQL Server ODBC DSN for live SHOWPLAN_XML (read-only)")
+    tui.set_defaults(func=_cmd_tui)
 
     args = parser.parse_args(argv)
     return args.func(args)

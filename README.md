@@ -48,6 +48,24 @@ python -m preflight.cli check fixtures/queries/crrt_flowsheet.sql \
 python -m preflight.cli check my_query.sql --catalog omop --format json
 ```
 
+## Triage TUI (Conduct of Operations)
+
+An interactive, color terminal view for vetting queries and making a fast go / no-go call:
+
+```bash
+# Single query — a triage panel with a GO / REVIEW / BLOCK verdict:
+python -m preflight.cli tui my_query.sql --catalog clarity
+
+# A whole folder — a worklist of all *.sql, sorted worst-risk-first; pick one to drill in:
+python -m preflight.cli tui ./queries/ --catalog omop --dialect duckdb
+
+# Attach a live plan (any read-only connector) and add --no-input for scripted/CI use:
+python -m preflight.cli tui report.sql --catalog clarity --sqlserver-dsn "..." --no-input
+```
+
+Verdicts map from risk: `LOW → GO`, `MEDIUM → GO (caution)`, `HIGH → REVIEW`, `CRITICAL → BLOCK`
+(an `EXTREME` runtime escalates a borderline case). Requires `rich` (in `requirements.txt`).
+
 ## What's in the report
 
 | Section | What it tells you |
