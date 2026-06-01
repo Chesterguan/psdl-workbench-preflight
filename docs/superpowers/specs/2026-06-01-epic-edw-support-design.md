@@ -8,11 +8,15 @@
 
 Make Preflight produce accurate reports for **Epic EDW** SQL, delivered in phases:
 
-- **Phase 1 (this spec):** offline support — seed Epic catalogs + correct dialect
-  parsing + a small engine generalization so the existing risk/scale/optimize rules fire
-  on Epic event-grain tables. Fully hermetic (no DB connection required).
+- **Phase 1 (this spec):** a **read-only catalog bootstrapper** that auto-generates catalog
+  YAMLs by introspecting a database's *system catalogs*, plus T-SQL dialect support and a
+  small wording fix. The bootstrapper is how catalogs get built (the user chose
+  "bootstrapper first" over hand-writing). The analysis engine itself stays hermetic.
 - **Phase 2 (separate, later spec):** a live, read-only **SQL Server connector** that
   pulls *estimated* execution plans (`SET SHOWPLAN_XML ON`, no execution). Optionally Oracle.
+
+> **Decision (2026-06-01):** catalogs are produced by the auto-bootstrapper, not hand-written.
+> Hand-tuned seed YAMLs are kept only as small, committed starters/test fixtures.
 
 ## Grounding (validated, not assumed)
 
@@ -30,6 +34,31 @@ Two real sample queries (UF Health OR-cases reports) were analyzed:
   `generic` dialect fails on the `{fn}`/CAST syntax — so **tsql is required**. No parser
   rewrite is needed for Phase 1.
 
+## Operational context: EDW refresh windows (offline-first)
+
+Users typically cannot query Epic Chronicles directly — they read from the **Epic EDW
+(Clarity/Caboodle), which is batch-refreshed by nightly ETL + backup**. During that
+load/cleaning/backup window the warehouse is unavailable or mid-refresh, and query results
+otherwise reflect "as of the last successful load." So **live EDW access is intermittent**,
+and waiting for the refresh to finish is a real cost.
+
+This is exactly why a **deterministic, offline, catalog-based** analyzer fits: the core
+analysis path needs **no live connection**, so a query can be preflighted any time — even
+while the EDW is mid-refresh or unavailable. Design consequences (folded into Phase 1):
+
+- **Offline-first.** `run_preflight(sql, catalog)` with no connector is the primary mode;
+  it depends only on the committed catalog YAML, never the EDW.
+- **Bootstrapper is occasional, not per-query.** Catalog YAMLs are generated **once per
+  refresh cadence** (run the bootstrapper during an availability window, post-load) and
+  committed/cached. Day-to-day preflighting reads the static catalog — zero EDW access.
+- **Freshness stamp.** The bootstrapper stamps each generated YAML with a top-level
+  `stats_as_of` (a caller-supplied timestamp string — the runtime forbids wall-clock reads),
+  and `load_catalog` exposes it so a report/`--show-catalog-age` can note how stale the
+  estimates are.
+- **Graceful degradation.** When a live connector (bootstrapper or Phase-2 plan) cannot reach
+  the EDW (e.g. mid-load), it fails with a clear message and the caller falls back to the
+  offline catalog estimate rather than blocking.
+
 ## Decisions (from brainstorming)
 
 1. **Catalogs:** model the *real* EDW as `clarity.yaml` **and** add a textbook
@@ -41,10 +70,45 @@ Two real sample queries (UF Health OR-cases reports) were analyzed:
 
 ## Phase 1 components
 
-### 1. Catalog data (the bulk)
-`preflight/catalog/schemas/clarity.yaml` and `caboodle.yaml`, same shape as `omop.yaml`
-(`schema`, `tables{category,volume,risk,row_estimate}`, `joins`, `columns`), plus one new
-optional top-level key `default_dialect: tsql`.
+### 1. Catalog bootstrapper (read-only system-catalog introspection → YAML)
+New module `preflight/catalog/bootstrap.py` + CLI subcommand `preflight catalog-bootstrap`.
+It connects read-only and queries **system catalogs only** — never the user's analytical
+query, never patient-data tables — to emit a catalog-YAML **draft** for human review.
+
+- **Introspector protocol** (`introspect() -> List[TableStat]`, where `TableStat =
+  {schema, name, row_estimate}`; optional `column_ndistinct(table)` for selectivity).
+  Backend implementations:
+  - `PostgresIntrospector(dsn)` — `SELECT n.nspname, c.relname, c.reltuples::bigint
+    FROM pg_class c JOIN pg_namespace n … WHERE c.relkind='r'` (estimate from stats, no scan).
+  - `DuckDBIntrospector(con)` — `duckdb_tables()` / `information_schema.tables`.
+  - `SQLServerIntrospector(dsn)` — `SELECT s.name, t.name, SUM(p.rows) FROM sys.tables t
+    JOIN sys.partitions p ON t.object_id=p.object_id AND p.index_id IN (0,1) GROUP BY …`
+    (lazy `pyodbc`/`pymssql` import, optional dep). This is the path that generates the real
+    Epic `clarity.yaml`/`caboodle.yaml` — the user runs it in their Epic-connected env. Tested
+    hermetically by feeding a captured rowset (same pattern as the Postgres EXPLAIN-plan test);
+    the live run is opt-in.
+- **Pure mapping functions** (deterministic, unit-testable, no I/O):
+  - `category_for(name, heuristic)` — `heuristic="epic"`: `_DTL$`→`encounter` if name contains
+    `ENCOUNTER` else `clinical_event`; `^ALL_`→`demographics` if `PATIENT` else `dimension`;
+    `_KEY_XREF$`→`bridge`; `Fact$`→`encounter`/`clinical_event`; `Dim$`→`dimension`.
+    `heuristic="omop"`: built-in CDM name→category map. `"generic"`: by volume.
+  - `volume_for(row_estimate)` and `risk_for(category, volume)` — deterministic threshold tables
+    (volume thresholds mirror `loader._VOLUME_ROWS`).
+- **Emit:** `to_yaml(catalog_dict)` writes the `omop.yaml`-shaped YAML with a header comment
+  `# AUTO-GENERATED draft — review category/risk before committing` and `default_dialect`.
+- **CLI:** `preflight catalog-bootstrap --postgres-dsn DSN | --duckdb-path PATH |
+  --sqlserver-dsn DSN  --schema-name clarity --heuristic epic [--out clarity.yaml]`.
+  Round-trips: the emitted YAML loads back via `load_catalog`.
+
+This executes read-only metadata queries (counts/stats), which is distinct from the original
+"no query execution" rule (that rule is about the *analyzed* SQL). Privacy: no PHI — only table
+names, row counts, and n_distinct stats. (See privacy audit; same posture.)
+
+### 2. Catalog content & category vocabulary (what the bootstrapper emits / seeds encode)
+Seed YAMLs (`clarity.yaml`, `caboodle.yaml`) — small hand-tuned **starters + test fixtures**,
+since we can't reach the user's SQL Server from here; the bootstrapper regenerates/extends them
+against the real EDW. Same shape as `omop.yaml` (`schema`, `tables{category,volume,risk,
+row_estimate}`, `joins`, `columns`) plus optional top-level `default_dialect: tsql`.
 
 **Categories reuse the existing engine vocabulary** (`demographics`, `encounter`,
 `clinical_event`) for behavior, plus display-only labels (`dimension`, `reference`,
@@ -75,14 +139,14 @@ category check, no speculative category strings).
   `demographics`; `DepartmentDim`, `ProviderDim`, `DateDim` → `dimension` (small/medium, low),
   with `*Fact->*Dim` joins.
 
-### 2. Output wording (small, OMOP jargon → schema-neutral) — review S1
+### 3. Output wording (small, OMOP jargon → schema-neutral) — review S1
 The risk/optimize messages currently say "clinical event table" and "concept filter" (OMOP
 vocabulary), which read wrong for an Epic analyst. Genericize in `risk.py` and `optimize.py`:
 "clinical event table" → "high-volume event table"; "concept filter" → "a selective filter
 (e.g. a code or date predicate)". Behavior unchanged; benefits all schemas. This is the only
 engine-code edit in Phase 1.
 
-### 3. Catalog-defaulted dialect
+### 4. Catalog-defaulted dialect
 - `preflight/catalog/loader.py`: `Catalog.__init__` gains `default_dialect: str = "generic"`;
   `load_catalog` passes `default_dialect=data.get("default_dialect", "generic")` to the
   constructor and `Catalog` exposes it as `.default_dialect`. (Review S3 — explicit edit list.)
@@ -93,7 +157,7 @@ engine-code edit in Phase 1.
 - The library API is unchanged (`GeneratedSQL.dialect` still explicit); only the CLI gains
   the convenience.
 
-### 4. Synthetic test fixture
+### 5. Synthetic test fixture
 `fixtures/queries/epic_or_cases.sql` — a small, hand-written T-SQL query using the same
 patterns: a couple `*_DTL` joins to `ALL_*` dims and a `*_KEY_XREF`, a `dbo.` schema, a
 single-quoted alias, a date filter, and — **required** — a 3-arg `CONVERT(varchar(N), col,
@@ -101,7 +165,7 @@ style)` (and/or `DATEADD/DATEDIFF`). Review M2: `{fn ...}` escapes alone parse f
 `generic` dialect, so the fixture must include `CONVERT`-style T-SQL syntax for the
 "`generic` raises `PreflightParseError`" assertion to actually hold. Contains no patient data.
 
-### 5. Known v1 limitation (documented)
+### 6. Known v1 limitation (documented)
 Derived-table aliases from `UNION ALL`/subqueries (e.g. `Table__1308`, `OR_KEY_XREF`) are
 not resolved into lineage join edges (they are subqueries, not base tables). No crash;
 base tables and join counts are still correct. Out of scope for Phase 1.
