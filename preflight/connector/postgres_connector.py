@@ -1,12 +1,27 @@
 """Postgres live connector. EXPLAIN (FORMAT JSON) carries Plan Rows; no execution."""
 from __future__ import annotations
 
+import re
 from typing import List
 
 from preflight.connector.base import PlanFacts
 from preflight.contracts import PlanNode
 
 _SEQ_SCAN_HINT_THRESHOLD = 1000
+
+# Plan "Filter" predicates embed literal values (which in clinical SQL can be PHI:
+# MRNs, DOBs, free text). Redact them to '?' before any predicate text reaches the
+# rendered/serialized report — keep column names and operators for index advice.
+_STRING_LIT_RE = re.compile(r"'(?:[^']|'')*'")
+_NUM_LIT_RE = re.compile(r"(?<![A-Za-z0-9_])\d+(?:\.\d+)?")
+
+
+def _redact_literals(predicate: str) -> str:
+    """Replace string/numeric literals in a plan predicate with '?'. Identifiers that
+    merely contain digits (e.g. order_results_2) are preserved."""
+    redacted = _STRING_LIT_RE.sub("?", predicate)
+    redacted = _NUM_LIT_RE.sub("?", redacted)
+    return redacted
 
 
 def parse_pg_plan(plan_json: List[dict]) -> PlanFacts:
@@ -28,7 +43,8 @@ def parse_pg_plan(plan_json: List[dict]) -> PlanFacts:
         if op == "Seq Scan" and (node.get("Plan Rows") or 0) > _SEQ_SCAN_HINT_THRESHOLD:
             rel = node.get("Relation Name", "?")
             filt = node.get("Filter", "")
-            hints.append(f"Sequential scan on {rel}; consider an index{(' for ' + filt) if filt else ''}")
+            safe = _redact_literals(filt) if filt else ""
+            hints.append(f"Sequential scan on {rel}; consider an index{(' for ' + safe) if safe else ''}")
         for child in node.get("Plans", []) or []:
             walk(child)
 

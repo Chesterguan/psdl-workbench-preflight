@@ -43,7 +43,12 @@ whatever the DB returns in the *plan*. EXPLAIN returns plan estimates, not resul
 
 ## Findings
 
-### F1 — Postgres plan `Filter` literals leak into the report — **MEDIUM**
+### F1 — Postgres plan `Filter` literals leak into the report — **MEDIUM** — ✅ RESOLVED (2026-06-01)
+**Fix:** `postgres_connector._redact_literals` now replaces string/numeric literals in plan
+predicates with `?` before they reach `missing_index_hints` (column names/operators kept;
+identifiers with digits preserved). Verified by `test_seq_scan_hint_redacts_*`. Original
+finding below for the record.
+
 `preflight/connector/postgres_connector.py` (`walk()`): for a `Seq Scan` it does
 `hints.append(f"Sequential scan on {rel}; consider an index for {filt}")` where `filt`
 is the raw plan `Filter` string. Postgres `Filter` strings embed **literal values**.
@@ -115,8 +120,8 @@ especially JSON — as sensitive output.
 
 ## Residual risks / deployment guidance
 
-1. **Fix F1** before relying on the Postgres live path with real PHI — redact predicate
-   literals from `missing_index_hints`.
+1. ~~**Fix F1** before relying on the Postgres live path with real PHI — redact predicate
+   literals from `missing_index_hints`.~~ ✅ Done 2026-06-01.
 2. **Credentials:** pass the Postgres DSN via `PREFLIGHT_PG_DSN`, not `--postgres-dsn`; use
    a read-only role/replica.
 3. **Treat reports as sensitive:** JSON/text reports contain real schema and (with a PG

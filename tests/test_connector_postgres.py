@@ -33,6 +33,32 @@ def test_seq_scan_on_large_table_emits_missing_index_hint():
     assert any("measurement" in h for h in facts.missing_index_hints)
 
 
+def test_seq_scan_hint_redacts_numeric_literal():
+    # F1: a plan Filter literal (could be an MRN/patient_id) must NOT reach the hint.
+    facts = parse_pg_plan(PG_PLAN)
+    joined = " ".join(facts.missing_index_hints)
+    assert "3016723" not in joined               # literal value redacted
+    assert "measurement_concept_id" in joined    # column kept for index advice
+    assert "?" in joined                          # redaction placeholder present
+
+
+def test_seq_scan_hint_redacts_string_and_date_literals():
+    plan = [{"Plan": {
+        "Node Type": "Seq Scan", "Relation Name": "patient", "Plan Rows": 5000,
+        "Filter": "((pat_mrn = '1234567') AND (birth_date = '1950-02-03'))",
+    }}]
+    joined = " ".join(parse_pg_plan(plan).missing_index_hints)
+    assert "1234567" not in joined and "1950-02-03" not in joined  # PHI literals gone
+    assert "pat_mrn" in joined and "birth_date" in joined          # columns kept
+
+
+def test_redact_literals_preserves_identifiers_with_digits():
+    from preflight.connector.postgres_connector import _redact_literals
+    out = _redact_literals("(order_results_2 = 42)")
+    assert "order_results_2" in out   # trailing digit in identifier preserved
+    assert "42" not in out            # standalone numeric literal redacted
+
+
 @pytest.mark.skipif(not os.environ.get("PREFLIGHT_PG_DSN"),
                     reason="set PREFLIGHT_PG_DSN to run live Postgres test")
 def test_live_postgres_explain():
