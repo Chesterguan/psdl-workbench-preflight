@@ -1,0 +1,27 @@
+schema: epic
+tables:
+  PAT_ENC_HSP:
+    category: encounter
+    volume: medium
+    risk: low
+    row_estimate: 7200000
+  IP_FLWSHT_REC:
+    category: flowsheet
+    volume: large
+    risk: high
+    row_estimate: 80000000
+  IP_FLWSHT_MEAS:
+    category: clinical_event
+    volume: huge
+    risk: very_high
+    row_estimate: 42000000000
+  MAR_ADMIN_INFO:
+    category: clinical_event
+    volume: large
+    risk: high
+    row_estimate: 900000000
+joins:
+  PAT_ENC_HSP->IP_FLWSHT_REC: high
+  IP_FLWSHT_REC->IP_FLWSHT_MEAS: high
+columns:
+  IP_FLWSHT_MEAS.FLO_MEAS_ID: 0.0002

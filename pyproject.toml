@@ -1,0 +1,11 @@
+[project]
+name = "preflight"
+version = "0.1.0"
+description = "Deterministic SQL pre-execution analyzer for PSDL Workbench"
+requires-python = ">=3.9"
+
+[tool.setuptools.packages.find]
+include = ["preflight*"]
+
+[project.scripts]
+preflight = "preflight.cli:main"

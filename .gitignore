@@ -4,3 +4,5 @@ __pycache__/
 .pytest_cache/
 *.duckdb
 .DS_Store
+.env
+.preflight/

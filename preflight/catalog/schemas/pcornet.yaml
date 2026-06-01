@@ -1,0 +1,22 @@
+schema: pcornet
+tables:
+  DEMOGRAPHIC:
+    category: demographics
+    volume: medium
+    risk: low
+    row_estimate: 2000000
+  ENCOUNTER:
+    category: encounter
+    volume: large
+    risk: medium
+    row_estimate: 30000000
+  LAB_RESULT_CM:
+    category: clinical_event
+    volume: huge
+    risk: very_high
+    row_estimate: 1200000000
+joins:
+  DEMOGRAPHIC->ENCOUNTER: high
+  ENCOUNTER->LAB_RESULT_CM: high
+columns:
+  LAB_RESULT_CM.LAB_LOINC: 0.0006

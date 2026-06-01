@@ -1,0 +1,114 @@
+# Seed Epic Clarity-derived EDW catalog (UF-style ALL_*/_DTL/_KEY_XREF naming).
+# Row estimates are illustrative; regenerate with `preflight catalog-bootstrap`.
+schema: clarity
+default_dialect: tsql
+tables:
+  PATIENT_ENCOUNTER_DTL:
+    category: encounter
+    volume: large
+    risk: high
+    row_estimate: 40000000
+  OR_ENCOUNTER_DTL:
+    category: encounter
+    volume: large
+    risk: high
+    row_estimate: 5000000
+  AN_ENCOUNTER_DTL:
+    category: encounter
+    volume: medium
+    risk: medium
+    row_estimate: 3000000
+  ORDER_PROCEDURE_DTL:
+    category: clinical_event
+    volume: huge
+    risk: very_high
+    row_estimate: 1200000000
+  OR_CASE_PROCEDURE_DTL:
+    category: clinical_event
+    volume: large
+    risk: high
+    row_estimate: 30000000
+  OR_LOG_PROCEDURE_DTL:
+    category: clinical_event
+    volume: large
+    risk: high
+    row_estimate: 25000000
+  AN_BLOCK_DTL:
+    category: clinical_event
+    volume: medium
+    risk: medium
+    row_estimate: 2000000
+  ALL_PATIENTS:
+    category: demographics
+    volume: medium
+    risk: low
+    row_estimate: 2000000
+  ALL_PATIENT_SNAPSHOTS:
+    category: dimension
+    volume: large
+    risk: low
+    row_estimate: 12000000
+  ALL_PATIENT_IDENTITIES:
+    category: dimension
+    volume: medium
+    risk: low
+    row_estimate: 3000000
+  ALL_PROVIDERS:
+    category: dimension
+    volume: small
+    risk: low
+    row_estimate: 50000
+  ALL_PROVIDER_IDENTITIES:
+    category: dimension
+    volume: small
+    risk: low
+    row_estimate: 80000
+  ALL_OR_ROOMS:
+    category: dimension
+    volume: tiny
+    risk: low
+    row_estimate: 500
+  ALL_OR_PROCEDURES:
+    category: dimension
+    volume: small
+    risk: low
+    row_estimate: 60000
+  ALL_OR_ANESTHESIA_TYPES:
+    category: dimension
+    volume: tiny
+    risk: low
+    row_estimate: 200
+  ALL_SERVICE_CODES:
+    category: dimension
+    volume: small
+    risk: low
+    row_estimate: 20000
+  ALL_HOSPITAL_ORGANIZATIONS:
+    category: dimension
+    volume: small
+    risk: low
+    row_estimate: 5000
+  OR_CASE_KEY_XREF:
+    category: bridge
+    volume: medium
+    risk: low
+    row_estimate: 5000000
+  ORDR_PROC_KEY_XREF:
+    category: bridge
+    volume: large
+    risk: low
+    row_estimate: 60000000
+  PATNT_ENCNTR_KEY_XREF:
+    category: bridge
+    volume: medium
+    risk: low
+    row_estimate: 4000000
+joins:
+  PATIENT_ENCOUNTER_DTL->ALL_PATIENTS: high
+  PATIENT_ENCOUNTER_DTL->OR_ENCOUNTER_DTL: high
+  OR_ENCOUNTER_DTL->ORDER_PROCEDURE_DTL: high
+  OR_ENCOUNTER_DTL->OR_CASE_PROCEDURE_DTL: high
+  PATIENT_ENCOUNTER_DTL->ORDER_PROCEDURE_DTL: high
+columns:
+  ORDER_PROCEDURE_DTL.PROC_CD: 0.001
+  OR_ENCOUNTER_DTL.SCHD_DATE: 0.01

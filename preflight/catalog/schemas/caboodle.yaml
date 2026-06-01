@@ -1,0 +1,53 @@
+# Seed Epic Caboodle (dimensional) catalog. Regenerate with `preflight catalog-bootstrap`.
+schema: caboodle
+default_dialect: tsql
+tables:
+  EncounterFact:
+    category: encounter
+    volume: huge
+    risk: high
+    row_estimate: 800000000
+  SurgicalCaseFact:
+    category: encounter
+    volume: large
+    risk: high
+    row_estimate: 20000000
+  DiagnosisEventFact:
+    category: clinical_event
+    volume: huge
+    risk: very_high
+    row_estimate: 3000000000
+  LabComponentResultFact:
+    category: clinical_event
+    volume: huge
+    risk: very_high
+    row_estimate: 5000000000
+  PatientDim:
+    category: demographics
+    volume: medium
+    risk: low
+    row_estimate: 2500000
+  DepartmentDim:
+    category: dimension
+    volume: small
+    risk: low
+    row_estimate: 8000
+  ProviderDim:
+    category: dimension
+    volume: small
+    risk: low
+    row_estimate: 60000
+  DateDim:
+    category: dimension
+    volume: tiny
+    risk: low
+    row_estimate: 40000
+joins:
+  EncounterFact->PatientDim: high
+  EncounterFact->DepartmentDim: high
+  EncounterFact->DateDim: high
+  DiagnosisEventFact->EncounterFact: high
+  LabComponentResultFact->EncounterFact: high
+columns:
+  DiagnosisEventFact.DiagnosisKey: 0.0008
+  LabComponentResultFact.LabComponentKey: 0.0005
