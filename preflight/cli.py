@@ -21,8 +21,15 @@ def main(argv: Optional[List[str]] = None) -> int:
     chk.add_argument("--catalog", default="omop", help="Schema family catalog name")
     chk.add_argument("--target", default="generic", help="Execution-target label for the report")
     chk.add_argument("--format", choices=["text", "json"], default="text")
-    chk.add_argument("--duckdb-fixture", action="store_true",
-                     help="Attach the synthetic OMOP DuckDB connector for live plan analysis")
+
+    # Live-plan source (optional). At most one — all are read-only, EXPLAIN-only.
+    conn_grp = chk.add_mutually_exclusive_group()
+    conn_grp.add_argument("--duckdb-fixture", action="store_true",
+                          help="Attach the synthetic OMOP DuckDB connector for live plan analysis")
+    conn_grp.add_argument("--duckdb-path", metavar="PATH",
+                          help="Path to a local DuckDB database file (opened read-only)")
+    conn_grp.add_argument("--postgres-dsn", metavar="DSN",
+                          help="Postgres DSN (e.g. postgresql://user@host/db) for live EXPLAIN")
 
     args = parser.parse_args(argv)
 
@@ -37,6 +44,13 @@ def main(argv: Optional[List[str]] = None) -> int:
             from fixtures.build_omop import build_omop_duckdb
             from preflight.connector.duckdb_connector import DuckDBConnector
             connector = DuckDBConnector(build_omop_duckdb())
+        elif args.duckdb_path:
+            import duckdb
+            from preflight.connector.duckdb_connector import DuckDBConnector
+            connector = DuckDBConnector(duckdb.connect(args.duckdb_path, read_only=True))
+        elif args.postgres_dsn:
+            from preflight.connector.postgres_connector import PostgresConnector
+            connector = PostgresConnector(args.postgres_dsn)
 
         report = run_preflight(sql, catalog, connector=connector)
         out = render_json(report) if args.format == "json" else render_text(report)
