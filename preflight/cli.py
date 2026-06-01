@@ -17,6 +17,7 @@ def _build_connector(args):
     """Resolve a connector from flags or PREFLIGHT_* env, or None. Read-only / EXPLAIN-only."""
     duckdb_path = getattr(args, "duckdb_path", None) or os.environ.get("PREFLIGHT_DUCKDB_PATH")
     pg_dsn = getattr(args, "postgres_dsn", None) or os.environ.get("PREFLIGHT_PG_DSN")
+    sqlserver_dsn = getattr(args, "sqlserver_dsn", None) or os.environ.get("PREFLIGHT_SQLSERVER_DSN")
     if getattr(args, "duckdb_fixture", False):
         from fixtures.build_omop import build_omop_duckdb
         from preflight.connector.duckdb_connector import DuckDBConnector
@@ -28,6 +29,9 @@ def _build_connector(args):
     if pg_dsn:
         from preflight.connector.postgres_connector import PostgresConnector
         return PostgresConnector(pg_dsn)
+    if sqlserver_dsn:
+        from preflight.connector.sqlserver_connector import SQLServerConnector
+        return SQLServerConnector(sqlserver_dsn)
     return None
 
 
@@ -105,6 +109,8 @@ def main(argv: Optional[List[str]] = None) -> int:
                           help="Local DuckDB file (opened read-only)")
     conn_grp.add_argument("--postgres-dsn", default=None,
                           help="Postgres DSN for live EXPLAIN")
+    conn_grp.add_argument("--sqlserver-dsn", default=None,
+                          help="SQL Server ODBC DSN for live SHOWPLAN_XML (read-only)")
     chk.set_defaults(func=_cmd_check)
 
     bs = sub.add_parser("catalog-bootstrap",

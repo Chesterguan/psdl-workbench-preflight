@@ -63,3 +63,12 @@ PREFLIGHT_CATALOG=clarity
 PREFLIGHT_DIALECT=tsql
 PREFLIGHT_SQLSERVER_DSN=Driver={ODBC Driver 18 for SQL Server};Server=...;Database=Clarity;...
 ```
+
+### Live query plan against SQL Server (read-only)
+With `pip install pyodbc` and an ODBC driver, attach the real EDW for an estimated plan
+(`SET SHOWPLAN_XML ON` — never executes the query):
+```bash
+preflight check report.sql --catalog clarity \
+  --sqlserver-dsn "Driver={ODBC Driver 18 for SQL Server};Server=...;Database=Clarity;UID=...;PWD=..."
+```
+Or put `PREFLIGHT_SQLSERVER_DSN=...` in `.env` and just run `preflight check report.sql --catalog clarity`.
