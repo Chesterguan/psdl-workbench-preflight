@@ -52,6 +52,15 @@ python -m preflight.cli check my_query.sql --catalog omop --format json
 
 An interactive, color terminal view for vetting queries and making a fast go / no-go call:
 
+**Single-query triage**
+
+![preflight tui — single query](docs/img/tui-single.svg)
+
+**Batch worklist** (a folder of queries, sorted worst-risk-first)
+
+![preflight tui — worklist](docs/img/tui-batch.svg)
+
+
 ```bash
 # Single query — a triage panel with a GO / REVIEW / BLOCK verdict:
 python -m preflight.cli tui my_query.sql --catalog clarity
