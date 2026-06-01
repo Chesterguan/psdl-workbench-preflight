@@ -80,3 +80,31 @@ def risk_for(category: str, volume: str) -> str:
     if category == "encounter" and tier == "very_high":
         tier = "high"  # encounter-grain tables are large but less risky than raw events
     return tier
+
+
+def bootstrap_catalog(stats: List[TableStat], schema: str, heuristic: str = "generic",
+                      default_dialect: Optional[str] = None,
+                      stats_as_of: Optional[str] = None) -> dict:
+    """Turn introspected TableStats into a catalog dict (omop.yaml shape)."""
+    tables = {}
+    for st in stats:
+        cat = category_for(st.name, heuristic)
+        vol = volume_for(st.row_estimate)
+        tables[st.name] = {
+            "category": cat,
+            "volume": vol,
+            "risk": risk_for(cat, vol),
+            "row_estimate": int(st.row_estimate),
+        }
+    doc: dict = {"schema": schema, "tables": tables}
+    if default_dialect:
+        doc["default_dialect"] = default_dialect
+    if stats_as_of:
+        doc["stats_as_of"] = stats_as_of
+    return doc
+
+
+def to_yaml(doc: dict) -> str:
+    """Serialize a catalog dict to YAML with a review-warning header."""
+    header = "# AUTO-GENERATED draft — review category/risk before committing.\n"
+    return header + yaml.safe_dump(doc, sort_keys=True, default_flow_style=False)
