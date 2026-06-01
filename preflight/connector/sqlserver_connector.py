@@ -38,6 +38,8 @@ def _to_int(val) -> Optional[int]:
 
 
 def parse_showplan_xml(xml_text: str) -> PlanFacts:
+    if not xml_text or not xml_text.strip():
+        return PlanFacts()  # empty/absent plan (e.g. server returned no rows) -> no facts
     root = ET.fromstring(xml_text)
     nodes: List[PlanNode] = []
     hints: List[str] = []

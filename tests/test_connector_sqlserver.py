@@ -60,6 +60,13 @@ def test_scan_predicate_literal_is_redacted():
     assert "PROC_CD" in joined            # column kept
 
 
+def test_empty_plan_returns_empty_facts():
+    # A blank/absent plan (server returned no plan row) degrades gracefully, no exception.
+    facts = parse_showplan_xml("")
+    assert facts.nodes == [] and facts.total_estimated_rows is None
+    assert parse_showplan_xml("   ").missing_index_hints == []
+
+
 def test_sqlserver_connector_constructs_without_driver():
     assert SQLServerConnector("Driver=...;Server=...;") is not None
 
