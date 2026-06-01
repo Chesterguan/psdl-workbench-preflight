@@ -108,3 +108,63 @@ def to_yaml(doc: dict) -> str:
     """Serialize a catalog dict to YAML with a review-warning header."""
     header = "# AUTO-GENERATED draft — review category/risk before committing.\n"
     return header + yaml.safe_dump(doc, sort_keys=True, default_flow_style=False)
+
+
+class Introspector(Protocol):
+    def introspect(self) -> List[TableStat]:
+        """Return read-only table row-count estimates from system catalogs."""
+        ...
+
+
+class DuckDBIntrospector:
+    def __init__(self, connection):
+        self._con = connection
+
+    def introspect(self) -> List[TableStat]:
+        rows = self._con.execute(
+            "SELECT table_name, estimated_size FROM duckdb_tables()"
+        ).fetchall()
+        return [TableStat(name=r[0], row_estimate=int(r[1] or 0)) for r in rows]
+
+
+class PostgresIntrospector:
+    _SQL = (
+        "SELECT n.nspname, c.relname, c.reltuples::bigint "
+        "FROM pg_class c JOIN pg_namespace n ON n.oid = c.relnamespace "
+        "WHERE c.relkind = 'r' "
+        "AND n.nspname NOT IN ('pg_catalog', 'information_schema')"
+    )
+
+    def __init__(self, dsn: str):
+        self._dsn = dsn
+
+    def introspect(self) -> List[TableStat]:
+        import psycopg
+        with psycopg.connect(self._dsn) as conn:
+            with conn.cursor() as cur:
+                cur.execute(self._SQL)
+                return [TableStat(name=r[1], row_estimate=max(int(r[2]), 0), schema=r[0])
+                        for r in cur.fetchall()]
+
+
+class SQLServerIntrospector:
+    """Epic EDW path. Reads sys.partitions row counts (no scan, no data). Live run
+    requires pyodbc/pymssql and a SQL Server connection — opt-in, not exercised in CI."""
+    _SQL = (
+        "SELECT s.name, t.name, SUM(p.rows) "
+        "FROM sys.tables t "
+        "JOIN sys.schemas s ON t.schema_id = s.schema_id "
+        "JOIN sys.partitions p ON t.object_id = p.object_id AND p.index_id IN (0, 1) "
+        "GROUP BY s.name, t.name"
+    )
+
+    def __init__(self, dsn: str):
+        self._dsn = dsn
+
+    def introspect(self) -> List[TableStat]:
+        import pyodbc  # optional dependency, imported lazily
+        with pyodbc.connect(self._dsn) as conn:
+            cur = conn.cursor()
+            cur.execute(self._SQL)
+            return [TableStat(name=r[1], row_estimate=int(r[2] or 0), schema=r[0])
+                    for r in cur.fetchall()]
