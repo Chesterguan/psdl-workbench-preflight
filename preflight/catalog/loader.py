@@ -35,11 +35,13 @@ class TableProfile:
 
 class Catalog:
     def __init__(self, schema: str, tables: Dict[str, TableProfile],
-                 joins: Dict[str, str], columns: Dict[str, float]):
+                 joins: Dict[str, str], columns: Dict[str, float],
+                 default_dialect: str = "generic"):
         self.schema = schema
         self._tables = tables
         self._joins = joins
         self._columns = columns
+        self.default_dialect = default_dialect
 
     def is_known(self, table: str) -> bool:
         return table.lower() in self._tables
@@ -57,10 +59,27 @@ class Catalog:
         return self._columns.get(column.lower())
 
 
-def load_catalog(schema: str) -> Catalog:
-    path = os.path.join(_SCHEMAS_DIR, f"{schema}.yaml")
-    if not os.path.exists(path):
-        raise FileNotFoundError(f"No catalog for schema '{schema}' at {path}")
+def _catalog_search_dirs(catalog_dir: Optional[str] = None):
+    dirs = []
+    if catalog_dir:
+        dirs.append(os.path.expanduser(catalog_dir))
+    env_dir = os.environ.get("PREFLIGHT_CATALOG_DIR")
+    if env_dir:
+        dirs.append(os.path.expanduser(env_dir))
+    dirs.append(os.path.expanduser("~/.preflight/catalogs"))
+    dirs.append(_SCHEMAS_DIR)  # packaged seeds (lowest priority)
+    return dirs
+
+
+def load_catalog(schema: str, catalog_dir: Optional[str] = None) -> Catalog:
+    path = None
+    for d in _catalog_search_dirs(catalog_dir):
+        candidate = os.path.join(d, f"{schema}.yaml")
+        if os.path.exists(candidate):
+            path = candidate
+            break
+    if path is None:
+        raise FileNotFoundError(f"No catalog for schema '{schema}' in any catalog dir")
     with open(path, "r") as fh:
         data = yaml.safe_load(fh) or {}
 
@@ -77,4 +96,5 @@ def load_catalog(schema: str) -> Catalog:
 
     joins = {k.lower(): v for k, v in (data.get("joins") or {}).items()}
     columns = {k.lower(): float(v) for k, v in (data.get("columns") or {}).items()}
-    return Catalog(schema=data.get("schema", schema), tables=tables, joins=joins, columns=columns)
+    return Catalog(schema=data.get("schema", schema), tables=tables, joins=joins,
+                   columns=columns, default_dialect=data.get("default_dialect", "generic"))
