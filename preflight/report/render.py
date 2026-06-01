@@ -1,4 +1,4 @@
-"""Render a PreflightReport to text, markdown, or JSON."""
+"""Render a PreflightReport to text or JSON."""
 from __future__ import annotations
 
 import json
@@ -71,7 +71,13 @@ def render_text(report: PreflightReport) -> str:
                 bits.append(f"join={n.join_type}")
             if n.estimated_rows is not None:
                 bits.append(f"~{_fmt(n.estimated_rows)} rows")
+            if n.index_used:
+                bits.append("index=yes")
             lines.append("  " + " ".join(bits))
+        if qp.missing_index_hints:
+            lines.append("  Missing Index Hints:")
+            for hint in qp.missing_index_hints:
+                lines.append(f"    - {hint}")
 
     lines.append("\n=== CONFIDENCE ===")
     lines.append(f"Overall Confidence: {report.confidence.value}")

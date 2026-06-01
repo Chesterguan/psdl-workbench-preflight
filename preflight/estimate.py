@@ -45,7 +45,6 @@ def estimate_scale(
     catalog_known_ratio: float,
     plan_rows: Optional[int] = None,
 ) -> Tuple[ScaleEstimate, RuntimeCategory]:
-    known_tables = [t for t in parsed.base_tables if catalog.is_known(t)]
     rows_by_table = {t: catalog.profile(t).effective_rows() for t in parsed.base_tables}
 
     driver_rows = max(rows_by_table.values()) if rows_by_table else 0

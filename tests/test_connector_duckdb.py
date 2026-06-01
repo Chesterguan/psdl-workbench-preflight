@@ -30,3 +30,28 @@ def test_connector_never_runs_analyze(con):
     conn = DuckDBConnector(con)
     facts = conn.analyze("SELECT person_id / 0 AS bad FROM person")
     assert facts is not None
+
+
+def test_both_tables_captured_from_join_explain(con):
+    """Both SEQ_SCAN nodes in a 2-table join must be captured, not just the first.
+
+    DuckDB 1.4.4 renders sibling operators side-by-side on the same text line
+    (two box-drawing boxes). The parser must use finditer, not .search, to avoid
+    dropping the second box.
+    """
+    conn = DuckDBConnector(con)
+    facts = conn.analyze(
+        "SELECT p.person_id FROM person p JOIN measurement m "
+        "ON p.person_id = m.person_id WHERE m.measurement_concept_id = 3016723"
+    )
+    # At minimum two scan nodes must be present
+    scan_nodes = [n for n in facts.nodes if n.scan_type is not None]
+    assert len(scan_nodes) >= 2, (
+        f"Expected >= 2 scan nodes, got {len(scan_nodes)}: {[n.op for n in facts.nodes]}"
+    )
+    # If Table: lines are parsed, both table names must appear
+    tables_found = {n.table for n in facts.nodes if n.table is not None}
+    if tables_found:
+        assert "person" in tables_found and "measurement" in tables_found, (
+            f"Expected both 'person' and 'measurement' in tables, got {tables_found}"
+        )

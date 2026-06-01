@@ -8,7 +8,6 @@ from preflight.contracts import RiskLevel, ScaleEstimate
 from preflight.parse.sql import ParsedSQL
 
 _RISK_SCORE = {"very_high": 3, "high": 2, "medium": 1, "low": 0, "unknown": 1}
-_ORDER = [RiskLevel.LOW, RiskLevel.MEDIUM, RiskLevel.HIGH, RiskLevel.CRITICAL]
 
 
 def assess_risk(parsed: ParsedSQL, catalog: Catalog,

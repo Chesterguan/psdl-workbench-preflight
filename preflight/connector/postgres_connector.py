@@ -1,7 +1,7 @@
 """Postgres live connector. EXPLAIN (FORMAT JSON) carries Plan Rows; no execution."""
 from __future__ import annotations
 
-from typing import Any, List
+from typing import List
 
 from preflight.connector.base import PlanFacts
 from preflight.contracts import PlanNode
