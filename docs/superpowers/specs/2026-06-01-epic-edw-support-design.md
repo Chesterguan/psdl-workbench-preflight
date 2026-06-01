@@ -146,16 +146,34 @@ vocabulary), which read wrong for an Epic analyst. Genericize in `risk.py` and `
 (e.g. a code or date predicate)". Behavior unchanged; benefits all schemas. This is the only
 engine-code edit in Phase 1.
 
-### 4. Catalog-defaulted dialect
-- `preflight/catalog/loader.py`: `Catalog.__init__` gains `default_dialect: str = "generic"`;
-  `load_catalog` passes `default_dialect=data.get("default_dialect", "generic")` to the
-  constructor and `Catalog` exposes it as `.default_dialect`. (Review S3 — explicit edit list.)
-- `cli.py`: change `--dialect` default to `None`; resolve effective dialect as
-  `args.dialect or catalog.default_dialect or "generic"`. So
-  `preflight check q.sql --catalog clarity` parses as T-SQL automatically. (Existing
-  `tests/test_cli.py` pass `--dialect` explicitly, so this default change is safe — review N1.)
-- The library API is unchanged (`GeneratedSQL.dialect` still explicit); only the CLI gains
-  the convenience.
+### 4. CLI configuration: fixed catalog location, `.env`, dialect default
+Goal (user req): generated catalog YAMLs live in a **fixed location** and are found
+**transparently**; a local **`.env`** supplies defaults so the CLI "just works" without
+repeating flags. CLI-first — **no UI in this phase** (deferred until the CLI is complete and tested).
+
+- **Catalog resolution (fixed location).** `load_catalog(name)` resolves a catalog file by
+  searching, in order: (1) an explicit path/`--catalog-dir`, (2) the user catalog dir
+  `$PREFLIGHT_CATALOG_DIR` (default `~/.preflight/catalogs/`), (3) the packaged
+  `preflight/catalog/schemas/`. So `--catalog clarity` finds `clarity.yaml` whether it's a
+  committed seed or a bootstrapper-generated file in the user dir. The bootstrapper's `--out`
+  defaults to writing into `$PREFLIGHT_CATALOG_DIR` so freshly generated catalogs are picked
+  up with no path juggling.
+- **`.env` auto-load.** A tiny built-in `KEY=VALUE` reader (no new dependency) loads `.env`
+  from the CWD (and `~/.preflight/.env`) at CLI start, into `os.environ` if not already set.
+  Recognized keys: `PREFLIGHT_CATALOG_DIR`, `PREFLIGHT_CATALOG`, `PREFLIGHT_DIALECT`,
+  `PREFLIGHT_PG_DSN`, `PREFLIGHT_SQLSERVER_DSN`, `PREFLIGHT_DUCKDB_PATH`. **Precedence:**
+  explicit CLI flag > env var (incl. `.env`) > catalog `default_dialect` > built-in default.
+- **Privacy bonus (audit F2):** putting the DSN in a **gitignored** `.env` keeps credentials
+  off the command line / out of shell history. Add `.env` to `.gitignore`; the connector flags
+  fall back to `PREFLIGHT_*_DSN` when their flag is omitted.
+- **Dialect default.** `preflight/catalog/loader.py`: `Catalog.__init__` gains
+  `default_dialect: str = "generic"`; `load_catalog` reads `data.get("default_dialect",
+  "generic")` and exposes it as `.default_dialect` (review S3). `cli.py`: `--dialect` default
+  becomes `None`; effective dialect = `args.dialect or $PREFLIGHT_DIALECT or
+  catalog.default_dialect or "generic"`. Existing `tests/test_cli.py` pass `--dialect`
+  explicitly, so this is safe (review N1).
+- The **library API is unchanged** (`GeneratedSQL.dialect` explicit; `load_catalog` gains
+  optional dir resolution). Only the CLI gains the `.env`/auto-resolution convenience.
 
 ### 5. Synthetic test fixture
 `fixtures/queries/epic_or_cases.sql` — a small, hand-written T-SQL query using the same
@@ -183,14 +201,25 @@ base tables and join counts are still correct. Out of scope for Phase 1.
   `clarity` catalog; assert risk is HIGH/CRITICAL (event-grain `*_DTL` + multi-join), the top
   bottleneck is the highest-volume event table, `scale.encounters is not None` (review M1),
   and optimizations are non-empty.
-- `tests/test_cli.py` — add a case: `--catalog clarity` with no `--dialect` parses as tsql
-  (assert success on the synthetic query file).
+- `tests/test_cli.py` — `--catalog clarity` with no `--dialect` parses as tsql; a `.env` in
+  CWD supplies `PREFLIGHT_DIALECT`/`PREFLIGHT_CATALOG`/`PREFLIGHT_PG_DSN` and the CLI honors
+  them (monkeypatch CWD + env); explicit flags override `.env`.
+- `tests/test_bootstrap.py` — pure mapping units (`category_for`/`volume_for`/`risk_for` on
+  Epic-named inputs); `bootstrap_catalog` over a captured introspection rowset emits YAML with
+  expected categories; round-trip: emitted YAML → `load_catalog` succeeds. Plus a real
+  `DuckDBIntrospector` test against the synthetic fixture, and a gated live `PostgresIntrospector`
+  test (`$PREFLIGHT_PG_DSN`).
+- `tests/test_catalog_resolution.py` — `load_catalog` prefers `$PREFLIGHT_CATALOG_DIR` over the
+  packaged dir; falls back to packaged when absent (use `tmp_path`).
 - Existing `tests/test_no_llm_guard.py` and all current tests must stay green.
 
 ## Out of scope (Phase 1)
 
-Live SQL Server / Oracle connector (Phase 2), derived-table lineage resolution, naming-
-convention auto-inference for unseeded Epic tables, real row-count calibration.
+**Any UI / web frontend (explicitly deferred — CLI must be complete and tested first).** Also:
+live SQL Server / Oracle *plan* connector (Phase 2; the bootstrapper's SQL Server *introspector*
+IS in Phase 1 but its live run is opt-in/user-run), derived-table lineage resolution,
+naming-convention auto-inference for unseeded tables, real row-count calibration beyond what the
+bootstrapper reads.
 
 ## Related: privacy follow-up (separate from this feature)
 
