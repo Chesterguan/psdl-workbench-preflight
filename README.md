@@ -11,6 +11,29 @@ query**.
 It was built for clinical research data warehouses (OMOP, Epic Clarity/Caboodle, PCORnet), where
 a single generated query can scan billions of rows, but it works on any SQL.
 
+## Proof: catch a 1.5-billion-row mistake before it runs
+
+A clinical data scientist is drafting an **AKI-cohort extract** for the shared, nightly-refreshed
+OMOP warehouse. Before touching it, they triage all their draft queries in one shot — **offline,
+in ~2 seconds, with zero warehouse load**:
+
+![Preflight worklist triaging an AKI cohort extract](docs/img/tui-batch.svg)
+
+The naive first draft would have **full-scanned a 1.5-billion-row table**. Preflight flags it
+`BLOCK` and says exactly how to fix it — no query ever runs:
+
+![The naive draft flagged BLOCK with fixes](docs/img/tui-single.svg)
+
+| Draft | Verdict | Est. output | Runtime |
+|---|---|---|---|
+| `SELECT * FROM measurement` (naive) | 🔴 **BLOCK** | 1,500,000,000 | EXTREME |
+| concept + Q1-date scoped extract | 🟢 **GO (caution)** | ~8,000 *(live-plan confirmed)* | FAST |
+
+**~187,000× fewer rows — seen *before* execution.** No EDW slot consumed, no waiting for the
+nightly refresh, no DBA escalation: just a go/no-go and a concrete fix list. (Offline, the catalog
+gives a deliberately conservative estimate; attaching a live plan tightens it and raises confidence
+from MEDIUM → HIGH.)
+
 ## Why
 
 - **Deterministic & zero-LLM.** Every result comes from rules, catalog metadata, and (optionally)
