@@ -3,6 +3,18 @@ name = "preflight"
 version = "0.1.0"
 description = "Deterministic SQL pre-execution analyzer for PSDL Workbench"
 requires-python = ">=3.9"
+dependencies = [
+    "sqlglot>=30",
+    "duckdb>=1.4",
+    "pydantic>=2.5",
+    "PyYAML>=6.0",
+    "rich>=13",
+]
+
+[project.optional-dependencies]
+# Live database connectors — only needed to attach a real EXPLAIN plan.
+# Inspector (offline core) never installs these; PSDL Workbench does.
+live = ["psycopg[binary]>=3.1", "pyodbc>=5.1"]
 
 [tool.setuptools.packages.find]
 include = ["preflight*"]
